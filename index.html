@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VoiceType</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <!-- Floating Small Mic Board (Draggable) -->
+      <div id="mic-board" class="mic-board" data-tauri-drag-region>
+        <!-- Left: Drag Grip & Target App Info -->
+        <div class="drag-grip" data-tauri-drag-region title="Drag to reposition overlay">
+          <div class="grip-dots" data-tauri-drag-region>
+            <span></span><span></span>
+            <span></span><span></span>
+            <span></span><span></span>
+          </div>
+          <div id="target-badge" class="target-badge" data-tauri-drag-region title="Current typing target">
+            <span class="target-status-dot"></span>
+            <span class="target-text">Active App</span>
+          </div>
+        </div>
+
+        <!-- Center: Glowing Mic Button & Reactive Ring -->
+        <div class="mic-btn-wrapper" data-tauri-drag-region="false">
+          <div class="mic-ambient-glow"></div>
+          <div class="mic-ripple-ring"></div>
+          <button id="mic-btn" class="mic-btn" data-tauri-drag-region="false" title="Click to start dictating (or press hotkey)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+              <line x1="12" x2="12" y1="19" y2="22"></line>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Center-Right: Audio Waveform Visualizer -->
+        <div class="waveform-container" data-tauri-drag-region>
+          <canvas id="waveform-canvas" width="60" height="28" data-tauri-drag-region></canvas>
+        </div>
+
+        <!-- Right Controls: Smart/Verbatim Badge, Settings Gear, Mini Toggle -->
+        <div class="controls-right" data-tauri-drag-region="false">
+          <div id="mode-badge" class="mode-badge" data-tauri-drag-region="false" title="Click to toggle Smart / Verbatim transcription">
+            <span class="mode-dot"></span>
+            <span class="mode-text">SMART</span>
+          </div>
+          <button id="drawer-toggle-btn" class="icon-btn" data-tauri-drag-region="false" title="Settings, Hotkeys & History">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+          </button>
+          <button id="mini-toggle-btn" class="icon-btn" data-tauri-drag-region="false" title="Compact Mini Mode">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 3v3a2 2 0 0 1-2 2H3"></path>
+              <path d="M21 8h-3a2 2 0 0 1-2-2V3"></path>
+              <path d="M3 16h3a2 2 0 0 1 2 2v3"></path>
+              <path d="M16 21v-3a2 2 0 0 1 2-2h3"></path>
+            </svg>
+          </button>
+          <button id="close-overlay-btn" class="icon-btn close-btn" data-tauri-drag-region="false" title="Hide Overlay (Press Ctrl+Alt+H to restore)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Live Interim Hypothesis Bubble (Pops up when dictating) -->
+      <div id="interim-bubble" class="interim-bubble">
+        <div class="interim-header">
+          <div class="interim-pulse">
+            <span class="pulse-dot"></span>
+            <span id="interim-status-title">Listening...</span>
+          </div>
+          <span id="interim-word-count">0 words</span>
+        </div>
+        <div id="interim-text" class="interim-text">
+          <span class="text-content"></span><span class="cursor"></span>
+        </div>
+      </div>
+
+      <!-- Settings & History Drawer -->
+      <div id="drawer-panel" class="drawer-panel">
+        <!-- Navigation Tabs -->
+        <div class="drawer-tabs">
+          <button class="drawer-tab active" data-tab="tab-settings">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            Settings
+          </button>
+          <button class="drawer-tab" data-tab="tab-hotkeys">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2" ry="2"></rect><line x1="6" y1="8" x2="6" y2="8"></line><line x1="10" y1="8" x2="10" y2="8"></line><line x1="14" y1="8" x2="14" y2="8"></line><line x1="18" y1="8" x2="18" y2="8"></line><line x1="6" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="18" y2="12"></line><line x1="8" y1="16" x2="16" y2="16"></line></svg>
+            Hotkeys
+          </button>
+          <button class="drawer-tab" data-tab="tab-history">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M12 7v5l4 2"></path></svg>
+            History
+          </button>
+          <button class="drawer-tab" data-tab="tab-diagnostics">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+            Status
+          </button>
+        </div>
+
+        <!-- Tab 1: Settings -->
+        <div id="tab-settings" class="tab-content active">
+          <!-- API Key -->
+          <div class="form-group">
+            <div class="form-label">
+              <span>Gemini API Key</span>
+              <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: #818cf8; font-size: 10px; text-decoration: none;">Get Free Key ↗</a>
+            </div>
+            <div class="input-row">
+              <input type="password" id="input-api-key" class="text-input mono" placeholder="AIzaSy..." />
+              <button id="btn-toggle-key" class="mini-btn" title="Show/Hide">👁</button>
+            </div>
+          </div>
+
+          <!-- Model Card -->
+          <div class="model-card">
+            <div class="model-name">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+              gemini-3.5-transcribe-live
+            </div>
+            <div style="font-size: 10px; color: var(--text-dim);">
+              Bidirectional real-time streaming speech-to-text with smart punctuation & Hybrid VAD.
+            </div>
+            <div class="model-features">
+              <span class="feature-pill">16kHz PCM</span>
+              <span class="feature-pill">Interim Hypotheses</span>
+              <span class="feature-pill">Smart Cleanup</span>
+              <span class="feature-pill">Hybrid VAD</span>
+            </div>
+          </div>
+
+          <!-- Mode & Typing Method -->
+          <div class="form-group">
+            <div class="form-label">Transcription Mode</div>
+            <select id="select-mode" class="select-input">
+              <option value="SMART">Smart (removes fillers, auto-punctuation & casing)</option>
+              <option value="VERBATIM">Verbatim (exact word-for-word transcript)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <div class="form-label">Typing Injection Method</div>
+            <select id="select-typing-method" class="select-input">
+              <option value="paste">Fast Paste (Instant Clipboard + Ctrl+V, Recommended)</option>
+              <option value="typewriter">Typewriter Simulation (Direct Unicode keystrokes)</option>
+              <option value="copy">Copy Only (Save to clipboard, no typing)</option>
+            </select>
+          </div>
+
+          <!-- Formatting Toggles -->
+          <div class="toggle-item">
+            <div class="toggle-info">
+              <span class="toggle-title">Add Trailing Space</span>
+              <span class="toggle-desc">Automatically append space after sentence</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="check-trailing-space" checked />
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="toggle-item">
+            <div class="toggle-info">
+              <span class="toggle-title">Sound Feedback</span>
+              <span class="toggle-desc">Acoustic chimes on start, stop, and typed</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="check-sound-feedback" checked />
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <!-- Language Hint -->
+          <div class="form-group">
+            <div class="form-label">Language Hint</div>
+            <select id="select-language" class="select-input">
+              <option value="auto">Auto-detect (70+ languages)</option>
+              <option value="bn-BD">Bengali (বাংলা)</option>
+              <option value="en-US">English (US)</option>
+              <option value="en-GB">English (UK)</option>
+              <option value="es-ES">Spanish</option>
+              <option value="fr-FR">French</option>
+              <option value="de-DE">German</option>
+              <option value="ja-JP">Japanese</option>
+              <option value="zh-CN">Chinese (Simplified)</option>
+              <option value="hi-IN">Hindi</option>
+              <option value="pt-BR">Portuguese (Brazil)</option>
+              <option value="it-IT">Italian</option>
+              <option value="ko-KR">Korean</option>
+            </select>
+          </div>
+
+          <!-- Custom Vocabulary (Speech Biasing) -->
+          <div class="form-group">
+            <div class="form-label">
+              <span>Custom Vocabulary Biasing</span>
+              <span class="form-sublabel">Comma separated</span>
+            </div>
+            <input type="text" id="input-custom-vocab" class="text-input" placeholder="Gemini, Tauri, Kubernetes, Rust, TypeScript..." />
+          </div>
+        </div>
+
+        <!-- Tab: Hotkeys & Mouse Pointer Options -->
+        <div id="tab-hotkeys" class="tab-content">
+          <!-- Mouse Pointer Target Toggle -->
+          <div class="hotkey-card mouse-target-card">
+            <div class="toggle-item" style="padding: 0;">
+              <div class="toggle-info">
+                <span class="toggle-title" style="color: #6ee7b7; display: flex; align-items: center; gap: 6px;">
+                  <span>🎯</span> Type at Mouse Pointer Position
+                </span>
+                <span class="toggle-desc">Auto-clicks and inputs text wherever mouse is pointing on PC</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="check-type-at-mouse" checked />
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Voice Typing Hotkey -->
+          <div class="hotkey-card">
+            <div class="form-label">
+              <span style="font-weight: 600; color: #a5b4fc;">🎤 Voice Typing Hotkey</span>
+              <span class="form-sublabel">Start / stop speaking</span>
+            </div>
+            <div class="input-row">
+              <input type="text" id="input-voice-hotkey" class="text-input mono" value="Ctrl+Alt+V" placeholder="e.g. Ctrl+Alt+V" />
+              <button id="btn-record-voice" class="mini-btn record-btn" title="Click then press keys on keyboard">🔴 Record</button>
+            </div>
+            <div class="hotkey-presets">
+              <span class="preset-chip" data-target="voice" data-val="Ctrl+Alt+V">Ctrl+Alt+V</span>
+              <span class="preset-chip" data-target="voice" data-val="Ctrl+Shift+Space">Ctrl+Shift+Space</span>
+              <span class="preset-chip" data-target="voice" data-val="Alt+V">Alt+V</span>
+              <span class="preset-chip" data-target="voice" data-val="F9">F9</span>
+              <span class="preset-chip" data-target="voice" data-val="Ctrl+Space">Ctrl+Space</span>
+            </div>
+          </div>
+
+          <!-- Overlay Show / Hide Hotkey -->
+          <div class="hotkey-card">
+            <div class="form-label">
+              <span style="font-weight: 600; color: #67e8f9;">👁️ Show / Hide Overlay Hotkey</span>
+              <span class="form-sublabel">Open or close anywhere</span>
+            </div>
+            <div class="input-row">
+              <input type="text" id="input-vis-hotkey" class="text-input mono" value="Ctrl+Alt+H" placeholder="e.g. Ctrl+Alt+H" />
+              <button id="btn-record-vis" class="mini-btn record-btn" title="Click then press keys on keyboard">🔴 Record</button>
+            </div>
+            <div class="hotkey-presets">
+              <span class="preset-chip" data-target="vis" data-val="Ctrl+Alt+H">Ctrl+Alt+H</span>
+              <span class="preset-chip" data-target="vis" data-val="Ctrl+Shift+H">Ctrl+Shift+H</span>
+              <span class="preset-chip" data-target="vis" data-val="Alt+H">Alt+H</span>
+              <span class="preset-chip" data-target="vis" data-val="Ctrl+Alt+Space">Ctrl+Alt+Space</span>
+            </div>
+          </div>
+
+          <div style="margin-top: 10px;">
+            <button id="btn-save-all-hotkeys" class="action-btn" style="width: 100%; justify-content: center; background: linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%);">
+              💾 Save & Apply Hotkeys
+            </button>
+            <div id="hotkey-status-msg" style="font-size: 11px; text-align: center; margin-top: 6px; color: var(--emerald); display: none;"></div>
+          </div>
+        </div>
+
+        <!-- Tab 2: History -->
+        <div id="tab-history" class="tab-content">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span style="font-size: 11px; color: var(--text-muted); font-weight: 600;">Recent Transcriptions</span>
+            <button id="btn-clear-history" class="mini-btn" style="color: var(--rose);">Clear All</button>
+          </div>
+          <div id="history-container" class="history-list">
+            <div style="font-size: 11px; color: var(--text-dim); text-align: center; padding: 20px 0;">
+              No transcriptions yet. Click mic or press hotkey to speak!
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3: Diagnostics -->
+        <div id="tab-diagnostics" class="tab-content">
+          <div class="form-group">
+            <div class="form-label">Live API Status</div>
+            <div id="diag-status" style="font-family: var(--font-mono); font-size: 11px; color: var(--emerald); padding: 8px; background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+              IDLE
+            </div>
+          </div>
+
+          <div class="form-group">
+            <div class="form-label">Connection Latency</div>
+            <div id="diag-latency" style="font-family: var(--font-mono); font-size: 11px; color: var(--text-main); padding: 8px; background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+              -- ms
+            </div>
+          </div>
+
+          <div class="form-group">
+            <div class="form-label">Total Words Typed</div>
+            <div id="diag-word-count" style="font-family: var(--font-mono); font-size: 11px; color: var(--cyan); padding: 8px; background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+              0 words
+            </div>
+          </div>
+
+          <div class="form-group">
+            <div class="form-label">Active Target Process</div>
+            <div id="diag-target-app" style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); padding: 8px; background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+              Active Window
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mini Orb Button (Visible when collapsed into Mini Mode) -->
+      <button id="mini-pill-btn" class="mini-pill-btn" title="Click to expand VoiceType">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+          <line x1="12" x2="12" y1="19" y2="22"></line>
+        </svg>
+      </button>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
